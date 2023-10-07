@@ -1,0 +1,84 @@
+version: '3'
+
+tasks:
+  setup:
+    cmds:
+      - go install github.com/deepmap/oapi-codegen/cmd/oapi-codegen@v1.16.2
+      - go install github.com/google/wire/cmd/wire@v0.5.0
+      - go install github.com/rubenv/sql-migrate/...@v1.5.2
+      - go install github.com/cosmtrek/air@v1.49.0
+      - go install honnef.co/go/tools/cmd/staticcheck@v0.4.6
+
+  db:start:
+    desc: 'Start postgresql by docker'
+    cmds:
+      - docker compose up -d
+
+  db:stop:
+    desc: 'Stop postgresql by docker'
+    cmds:
+      - docker compose stop
+
+  db:console:
+    desc: 'Start psql'
+    dotenv: ['.env']
+    cmds:
+      - docker exec -it go-oapi-sample-db /bin/bash -c "psql -U $DB_USER $DB_NAME"
+
+  db:schema-dump:
+    desc: 'Dump database schema'
+    dotenv: ['.env']
+    cmds:
+      - docker exec go-oapi-sample-db /bin/bash -c "pg_dump -s -U $DB_USER $DB_NAME"
+
+  db:create:
+    desc: 'Create database'
+    dotenv: ['.env']
+    cmds:
+      - docker exec go-oapi-sample-db /bin/bash -c "createdb -U $DB_USER $DB_NAME"
+
+  db:drop:
+    desc: 'Drop database'
+    dotenv: ['.env']
+    cmds:
+      - docker exec go-oapi-sample-db /bin/bash -c "dropdb -U $DB_USER $DB_NAME"
+
+  db:migrate:up:
+    desc: 'Execute sql-migrate up'
+    dotenv: ['.env']
+    cmds:
+      - sql-migrate up
+
+  test:
+    desc: 'Execute test'
+    dotenv: ['.env.test']
+    cmds:
+      - docker exec go-oapi-sample-db /bin/bash -c "dropdb --if-exists -U $DB_USER $DB_NAME"
+      - docker exec go-oapi-sample-db /bin/bash -c "createdb -U $DB_USER $DB_NAME"
+      - sql-migrate up
+      - go test -v ./...
+
+  lint:
+    desc: 'Lint code by staticcheck'
+    cmds:
+      - staticcheck ./...
+
+  gen:oapi:
+    desc: 'Generate code from opeanapi.yml by oapi-codegen'
+    cmds:
+      - oapi-codegen -generate server -package echo -o presentation/echo/server.gen.go openapi.yml
+      - oapi-codegen -generate types -package echo -o presentation/echo/types.gen.go openapi.yml
+      - oapi-codegen -generate spec -package echo -o presentation/echo/spec.gen.go openapi.yml
+
+  gen:wire:
+    desc: 'Generate wire injection code'
+    cmds:
+      - wire ./...
+
+  dev:
+    desc: 'Run dev server'
+    deps:
+      - gen:oapi
+      - gen:wire
+    cmds:
+      - air
